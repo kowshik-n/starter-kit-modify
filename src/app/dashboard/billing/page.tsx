@@ -1,210 +1,196 @@
-'use client'
+"use client";
 
-import { useState, useEffect, useCallback } from 'react'
-import { useRouter } from 'next/navigation'
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
-import { loadStripe } from '@stripe/stripe-js'
+import { useState, useEffect, useCallback } from "react";
+import { useRouter } from "next/navigation";
+import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
+import { loadStripe } from "@stripe/stripe-js";
+import { getUserSubscription, getBillingHistory } from "@/lib/supabaseService";
 import {
   CreditCardIcon,
   ClockIcon,
   CheckIcon,
-} from '@heroicons/react/24/outline'
+} from "@heroicons/react/24/outline";
 
 // Initialize Stripe
-const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!)
+const stripePromise = loadStripe(
+  process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!,
+);
 
 // Define pricing plans
 const pricingPlans = [
   {
-    title: 'Starter',
-    price: '99',
-    description: 'Perfect for side projects and small startups',
+    title: "Starter",
+    price: "99",
+    description: "Perfect for side projects and small startups",
     features: [
-      'Up to 5 team members',
-      'Basic analytics',
-      'Community support',
-      '5GB storage',
-      'API access',
+      "Up to 5 team members",
+      "Basic analytics",
+      "Community support",
+      "5GB storage",
+      "API access",
     ],
-    priceId: 'price_1QTPalGI6vk81n8V8PtyW1ow'
+    priceId: "price_1QTPalGI6vk81n8V8PtyW1ow",
   },
   {
-    title: 'Pro',
-    price: '249',
-    description: 'Best for growing businesses',
+    title: "Pro",
+    price: "249",
+    description: "Best for growing businesses",
     features: [
-      'Unlimited team members',
-      'Advanced analytics',
-      'Priority support',
-      '50GB storage',
-      'API access',
-      'Custom integrations',
+      "Unlimited team members",
+      "Advanced analytics",
+      "Priority support",
+      "50GB storage",
+      "API access",
+      "Custom integrations",
     ],
     popular: true,
-    priceId: 'price_1QTPbgGI6vk81n8VgYFOi983'
+    priceId: "price_1QTPbgGI6vk81n8VgYFOi983",
   },
   {
-    title: 'Enterprise',
-    price: '999',
-    description: 'For large scale applications',
+    title: "Enterprise",
+    price: "999",
+    description: "For large scale applications",
     features: [
-      'Unlimited everything',
-      'White-label options',
-      '24/7 phone support',
-      '500GB storage',
-      'API access',
-      'Custom development',
+      "Unlimited everything",
+      "White-label options",
+      "24/7 phone support",
+      "500GB storage",
+      "API access",
+      "Custom development",
     ],
-    priceId: 'price_1QTPcUGI6vk81n8V9567pzL9'
+    priceId: "price_1QTPcUGI6vk81n8V9567pzL9",
   },
-]
+];
 
 interface Subscription {
-  id: string
-  plan_id: string
-  status: string
-  current_period_end: string
-  cancel_at_period_end: boolean
+  id: string;
+  plan_id: string;
+  status: string;
+  current_period_end: string;
+  cancel_at_period_end: boolean;
 }
 
 interface BillingHistory {
-  id: string
-  amount: number
-  currency: string
-  status: string
-  invoice_url: string
-  created_at: string
+  id: string;
+  amount: number;
+  currency: string;
+  status: string;
+  invoice_url: string;
+  created_at: string;
 }
 
 export default function BillingPage() {
-  const [currentSubscription, setCurrentSubscription] = useState<Subscription | null>(null)
-  const [billingHistory, setBillingHistory] = useState<BillingHistory[]>([])
-  const [isLoading, setIsLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const [user, setUser] = useState<any>(null)
-  const supabase = createClientComponentClient()
-  const router = useRouter()
+  const [currentSubscription, setCurrentSubscription] =
+    useState<Subscription | null>(null);
+  const [billingHistory, setBillingHistory] = useState<BillingHistory[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [user, setUser] = useState<any>(null);
+  const supabase = createClientComponentClient();
+  const router = useRouter();
 
   const checkUser = useCallback(async () => {
     try {
-      const { data: { user } } = await supabase.auth.getUser()
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
       if (!user) {
-        router.push('/auth')
-        return
+        router.push("/auth");
+        return;
       }
-      setUser(user)
-      await fetchBillingData(user.id)
+      setUser(user);
+      await fetchBillingData(user.id);
     } catch (error) {
-      console.error('Error checking user:', error)
-      setError('Authentication error occurred')
+      console.error("Error checking user:", error);
+      setError("Authentication error occurred");
     } finally {
-      setIsLoading(false)
+      setIsLoading(false);
     }
-  }, [supabase.auth, router])
+  }, [supabase.auth, router, fetchBillingData]);
 
   useEffect(() => {
-    checkUser()
-  }, [checkUser])
+    checkUser();
+  }, [checkUser]);
 
   async function fetchBillingData(userId: string) {
     try {
-      // Fetch current subscription
-      const { data: subscription, error: subError } = await supabase
-        .from('subscriptions')
-        .select('*')
-        .eq('user_id', userId)
-        .eq('status', 'active')
-        .maybeSingle()
+      // Use service functions to fetch data in parallel
+      const [subscription, history] = await Promise.all([
+        getUserSubscription(userId),
+        getBillingHistory(userId, 10),
+      ]);
 
-      if (subError) {
-        console.error('Error fetching subscription:', subError)
-        // Don't set error for no subscription found
-        if (subError.code !== 'PGRST116') {
-          setError('Error loading subscription data')
-        }
-      } else if (subscription) {
-        setCurrentSubscription(subscription)
+      if (subscription) {
+        setCurrentSubscription(subscription);
       }
 
-      // Fetch billing history
-      const { data: history, error: historyError } = await supabase
-        .from('billing_history')
-        .select('*')
-        .eq('user_id', userId)
-        .order('created_at', { ascending: false })
-        .limit(10)
-
-      if (historyError) {
-        console.error('Error fetching billing history:', historyError)
-        // Don't set error for no history found
-        if (historyError.code !== 'PGRST116') {
-          setError('Error loading billing history')
-        }
-      } else {
-        setBillingHistory(history || [])
-      }
+      setBillingHistory(history);
     } catch (err) {
-      console.error('Error fetching billing data:', err)
-      setError('Failed to load billing information')
+      console.error("Error fetching billing data:", err);
+      setError("Failed to load billing information");
     }
   }
 
   async function handleSubscribe(priceId: string) {
     try {
-      setError(null)
-      
+      setError(null);
+
       if (!user) {
-        setError('Please log in to continue')
-        return
+        setError("Please log in to continue");
+        return;
       }
 
-      const response = await fetch('/api/create-checkout-session', {
-        method: 'POST',
+      const response = await fetch("/api/create-checkout-session", {
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
         },
         body: JSON.stringify({
           priceId,
         }),
-      })
+      });
 
-      const result = await response.json()
-      
+      const result = await response.json();
+
       if (!response.ok) {
-        throw new Error(result.error || 'Failed to create checkout session')
+        throw new Error(result.error || "Failed to create checkout session");
       }
 
       // Redirect to Stripe Checkout
-      window.location.href = result.url
+      window.location.href = result.url;
     } catch (err) {
-      console.error('Error:', err)
-      setError(err instanceof Error ? err.message : 'Failed to process subscription')
+      console.error("Error:", err);
+      setError(
+        err instanceof Error ? err.message : "Failed to process subscription",
+      );
     }
   }
 
   async function handleCancelSubscription() {
-    if (!currentSubscription?.id) return
+    if (!currentSubscription?.id) return;
 
     try {
-      setError(null)
-      const response = await fetch('/api/cancel-subscription', {
-        method: 'POST',
+      setError(null);
+      const response = await fetch("/api/cancel-subscription", {
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
         },
         body: JSON.stringify({
           subscriptionId: currentSubscription.id,
         }),
-      })
+      });
 
-      const result = await response.json()
-      if (!response.ok) throw new Error(result.error)
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error);
 
       // Refresh billing data
-      await fetchBillingData(user.id)
+      await fetchBillingData(user.id);
     } catch (err) {
-      console.error('Error:', err)
-      setError(err instanceof Error ? err.message : 'Failed to cancel subscription')
+      console.error("Error:", err);
+      setError(
+        err instanceof Error ? err.message : "Failed to cancel subscription",
+      );
     }
   }
 
@@ -213,7 +199,7 @@ export default function BillingPage() {
       <div className="min-h-screen bg-black flex items-center justify-center">
         <div className="text-white">Loading...</div>
       </div>
-    )
+    );
   }
 
   if (!user) {
@@ -223,23 +209,23 @@ export default function BillingPage() {
           Please log in to access billing information
         </div>
       </div>
-    )
+    );
   }
 
   return (
     <div className="max-w-7xl mx-auto space-y-8">
       {/* Header */}
       <div>
-        <h1 className="text-3xl font-bold text-white">Billing & Subscription</h1>
+        <h1 className="text-3xl font-bold text-white">
+          Billing & Subscription
+        </h1>
         <p className="mt-2 text-white/60">
           Manage your subscription and billing information
         </p>
       </div>
 
       {error && (
-        <div className="bg-red-500/10 text-red-500 p-4 rounded-lg">
-          {error}
-        </div>
+        <div className="bg-red-500/10 text-red-500 p-4 rounded-lg">{error}</div>
       )}
 
       {/* Current Plan */}
@@ -250,10 +236,16 @@ export default function BillingPage() {
             <div className="flex items-center justify-between">
               <div>
                 <h3 className="text-lg font-medium text-white">
-                  {pricingPlans.find(plan => plan.priceId === currentSubscription.plan_id)?.title || 'Unknown Plan'}
+                  {pricingPlans.find(
+                    (plan) => plan.priceId === currentSubscription.plan_id,
+                  )?.title || "Unknown Plan"}
                 </h3>
                 <p className="text-white/60">
-                  ${pricingPlans.find(plan => plan.priceId === currentSubscription.plan_id)?.price || '0'}/month
+                  $
+                  {pricingPlans.find(
+                    (plan) => plan.priceId === currentSubscription.plan_id,
+                  )?.price || "0"}
+                  /month
                 </p>
               </div>
               {currentSubscription.cancel_at_period_end ? (
@@ -269,8 +261,10 @@ export default function BillingPage() {
             <div className="pt-4 border-t border-white/5">
               <div className="flex items-center text-sm text-white/60">
                 <ClockIcon className="w-4 h-4 mr-2" />
-                Next billing date:{' '}
-                {new Date(currentSubscription.current_period_end).toLocaleDateString()}
+                Next billing date:{" "}
+                {new Date(
+                  currentSubscription.current_period_end,
+                ).toLocaleDateString()}
               </div>
             </div>
             {!currentSubscription.cancel_at_period_end && (
@@ -289,15 +283,17 @@ export default function BillingPage() {
 
       {/* Available Plans */}
       <div className="bg-[#111111] rounded-2xl p-8 border border-white/5">
-        <h2 className="text-xl font-semibold text-white mb-6">Available Plans</h2>
+        <h2 className="text-xl font-semibold text-white mb-6">
+          Available Plans
+        </h2>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           {pricingPlans.map((plan) => (
             <div
               key={plan.priceId}
               className={`rounded-lg p-8 ${
                 plan.popular
-                  ? 'bg-green-900/20 border-2 border-green-500'
-                  : 'bg-gray-800/50 border border-gray-700'
+                  ? "bg-green-900/20 border-2 border-green-500"
+                  : "bg-gray-800/50 border border-gray-700"
               }`}
             >
               <h3 className="text-xl font-semibold mb-4">{plan.title}</h3>
@@ -319,11 +315,13 @@ export default function BillingPage() {
                 disabled={currentSubscription?.plan_id === plan.priceId}
                 className={`w-full text-center py-3 px-6 rounded-lg transition-colors ${
                   plan.popular
-                    ? 'bg-green-500 hover:bg-green-600 text-black'
-                    : 'bg-white hover:bg-gray-200 text-black'
+                    ? "bg-green-500 hover:bg-green-600 text-black"
+                    : "bg-white hover:bg-gray-200 text-black"
                 } disabled:opacity-50`}
               >
-                {currentSubscription?.plan_id === plan.priceId ? 'Current Plan' : 'Subscribe'}
+                {currentSubscription?.plan_id === plan.priceId
+                  ? "Current Plan"
+                  : "Subscribe"}
               </button>
             </div>
           ))}
@@ -332,7 +330,9 @@ export default function BillingPage() {
 
       {/* Billing History */}
       <div className="bg-[#111111] rounded-2xl p-8 border border-white/5">
-        <h2 className="text-xl font-semibold text-white mb-6">Billing History</h2>
+        <h2 className="text-xl font-semibold text-white mb-6">
+          Billing History
+        </h2>
         {billingHistory.length > 0 ? (
           <div className="space-y-4">
             {billingHistory.map((item) => (
@@ -354,9 +354,9 @@ export default function BillingPage() {
                 <div className="flex items-center space-x-4">
                   <span
                     className={`px-3 py-1 rounded-full text-sm ${
-                      item.status === 'succeeded'
-                        ? 'bg-green-500/10 text-green-500'
-                        : 'bg-red-500/10 text-red-500'
+                      item.status === "succeeded"
+                        ? "bg-green-500/10 text-green-500"
+                        : "bg-red-500/10 text-red-500"
                     }`}
                   >
                     {item.status}
@@ -380,5 +380,5 @@ export default function BillingPage() {
         )}
       </div>
     </div>
-  )
-} 
+  );
+}
