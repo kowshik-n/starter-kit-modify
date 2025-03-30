@@ -1,10 +1,6 @@
 import { NextResponse } from 'next/server'
-import Stripe from 'stripe'
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
-
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: '2024-11-20.acacia',
-})
+import { razorpay } from '@/lib/razorpay'
 
 export async function POST(req: Request) {
   try {
@@ -27,9 +23,9 @@ export async function POST(req: Request) {
       )
     }
 
-    // Cancel the subscription at period end
-    await stripe.subscriptions.update(subscription.subscription_id, {
-      cancel_at_period_end: true,
+    // Cancel the subscription
+    await razorpay.subscriptions.cancel(subscription.subscription_id, {
+      cancel_at_cycle_end: true,
     })
 
     // Update subscription in database

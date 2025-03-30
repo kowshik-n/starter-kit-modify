@@ -3,21 +3,17 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
-import { loadStripe } from '@stripe/stripe-js'
 import {
   CreditCardIcon,
   ClockIcon,
   CheckIcon,
 } from '@heroicons/react/24/outline'
 
-// Initialize Stripe
-const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!)
-
 // Define pricing plans
 const pricingPlans = [
   {
     title: 'Starter',
-    price: '99',
+    price: '999',
     description: 'Perfect for side projects and small startups',
     features: [
       'Up to 5 team members',
@@ -26,11 +22,11 @@ const pricingPlans = [
       '5GB storage',
       'API access',
     ],
-    priceId: 'price_1QTPalGI6vk81n8V8PtyW1ow'
+    priceId: 'plan_starter_razorpay'
   },
   {
     title: 'Pro',
-    price: '249',
+    price: '2499',
     description: 'Best for growing businesses',
     features: [
       'Unlimited team members',
@@ -41,11 +37,11 @@ const pricingPlans = [
       'Custom integrations',
     ],
     popular: true,
-    priceId: 'price_1QTPbgGI6vk81n8VgYFOi983'
+    priceId: 'plan_pro_razorpay'
   },
   {
     title: 'Enterprise',
-    price: '999',
+    price: '9999',
     description: 'For large scale applications',
     features: [
       'Unlimited everything',
@@ -55,7 +51,7 @@ const pricingPlans = [
       'API access',
       'Custom development',
     ],
-    priceId: 'price_1QTPcUGI6vk81n8V9567pzL9'
+    priceId: 'plan_enterprise_razorpay'
   },
 ]
 
@@ -174,7 +170,7 @@ export default function BillingPage() {
         throw new Error(result.error || 'Failed to create checkout session')
       }
 
-      // Redirect to Stripe Checkout
+      // Redirect to Razorpay Checkout
       window.location.href = result.url
     } catch (err) {
       console.error('Error:', err)
@@ -302,7 +298,7 @@ export default function BillingPage() {
             >
               <h3 className="text-xl font-semibold mb-4">{plan.title}</h3>
               <div className="mb-4">
-                <span className="text-4xl font-bold">${plan.price}</span>
+                <span className="text-4xl font-bold">₹{plan.price}</span>
                 <span className="text-gray-400 ml-2">/month</span>
               </div>
               <p className="text-gray-400 mb-6">{plan.description}</p>
@@ -344,7 +340,7 @@ export default function BillingPage() {
                   <CreditCardIcon className="w-8 h-8 text-white/20 mr-4" />
                   <div>
                     <p className="text-white font-medium">
-                      ${item.amount} {item.currency.toUpperCase()}
+                      ₹{item.amount} {item.currency.toUpperCase()}
                     </p>
                     <p className="text-sm text-white/60">
                       {new Date(item.created_at).toLocaleDateString()}

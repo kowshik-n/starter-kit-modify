@@ -3,11 +3,7 @@
 import { CheckIcon } from '@heroicons/react/24/solid'
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { loadStripe } from '@stripe/stripe-js'
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
-
-// Initialize Stripe
-const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!)
 
 interface PricingCardProps {
   title: string
@@ -48,7 +44,7 @@ const PricingCard = ({
         return
       }
 
-      // Create Stripe Checkout Session
+      // Create Razorpay Checkout Session
       const response = await fetch('/api/create-checkout-session', {
         method: 'POST',
         headers: {
@@ -65,7 +61,7 @@ const PricingCard = ({
         throw new Error(result.error || 'Failed to create checkout session')
       }
 
-      // Redirect to Stripe Checkout URL
+      // Redirect to Razorpay Checkout URL
       window.location.href = result.url
     } catch (err) {
       console.error('Error:', err)
@@ -85,7 +81,7 @@ const PricingCard = ({
     >
       <h3 className="text-xl font-semibold mb-4">{title}</h3>
       <div className="mb-4">
-        <span className="text-4xl font-bold">${price}</span>
+        <span className="text-4xl font-bold">₹{price}</span>
         <span className="text-gray-400 ml-2">/month</span>
       </div>
       <p className="text-gray-400 mb-6">{description}</p>

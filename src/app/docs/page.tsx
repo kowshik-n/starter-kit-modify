@@ -202,20 +202,20 @@ export const EmailTemplate = ({
     title: 'Payments',
     content: [
       {
-        title: 'Stripe Integration',
+        title: 'Razorpay Integration',
         steps: [
           {
-            title: 'Create Stripe Account',
-            description: 'Sign up for a Stripe account and get your API keys.',
+            title: 'Create Razorpay Account',
+            description: 'Sign up for a Razorpay account and get your API keys.',
           },
           {
             title: 'Configure Webhook',
-            description: 'Set up Stripe webhook to handle payment events.',
-            code: 'stripe listen --forward-to localhost:3000/api/webhooks/stripe',
+            description: 'Set up Razorpay webhook to handle payment events.',
+            code: 'https://dashboard.razorpay.com/#/app/webhooks',
           },
           {
             title: 'Add Products',
-            description: 'Create your products and price plans in the Stripe dashboard.',
+            description: 'Create your subscription plans in the Razorpay dashboard.',
           },
         ],
       },

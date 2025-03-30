@@ -1,11 +1,7 @@
 import { NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
-import Stripe from 'stripe'
 import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
-
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: '2024-11-20.acacia',
-})
+import { razorpay } from '@/lib/razorpay'
 
 export async function POST(req: Request) {
   try {
@@ -45,50 +41,85 @@ export async function POST(req: Request) {
     const userId = session.user.id
     const customerEmail = session.user.email
 
-    // Create or retrieve Stripe customer
+    // Get the price details from the database
+    const { data: priceData } = await supabase
+      .from('subscription_plans')
+      .select('amount, name, interval')
+      .eq('price_id', priceId)
+      .single()
+
+    if (!priceData) {
+      return NextResponse.json(
+        { error: 'Price not found' },
+        { status: 404 }
+      )
+    }
+
+    // Create or retrieve Razorpay customer
     const { data: existingCustomer } = await supabase
       .from('customers')
-      .select('stripe_customer_id')
+      .select('razorpay_customer_id')
       .eq('user_id', userId)
       .single()
 
     let customerId: string
 
-    if (existingCustomer?.stripe_customer_id) {
-      customerId = existingCustomer.stripe_customer_id
+    if (existingCustomer?.razorpay_customer_id) {
+      customerId = existingCustomer.razorpay_customer_id
     } else {
-      const customer = await stripe.customers.create({
+      // Create a new Razorpay customer
+      const customer = await razorpay.customers.create({
+        name: customerEmail?.split('@')[0] || 'Customer',
         email: customerEmail,
-        metadata: {
-          userId,
+        notes: {
+          userId: userId,
         },
       })
       customerId = customer.id
 
       await supabase.from('customers').insert({
         user_id: userId,
-        stripe_customer_id: customerId,
+        razorpay_customer_id: customerId,
       })
     }
 
-    // Create Stripe checkout session
-    const checkoutSession = await stripe.checkout.sessions.create({
-      customer: customerId,
-      line_items: [
-        {
-          price: priceId,
-          quantity: 1,
-        },
-      ],
-      mode: 'subscription',
-      success_url: `${process.env.NEXT_PUBLIC_APP_URL}/dashboard/billing?success=true`,
-      cancel_url: `${process.env.NEXT_PUBLIC_APP_URL}/dashboard/billing?canceled=true`,
-      metadata: {
-        userId,
+    // Calculate amount in paise (Razorpay uses smallest currency unit)
+    const amountInPaise = Math.round(priceData.amount * 100)
+
+    // Create a subscription
+    const subscription = await razorpay.subscriptions.create({
+      plan_id: priceId,
+      customer_id: customerId,
+      total_count: 12, // For 12 months, adjust as needed
+      quantity: 1,
+      notes: {
+        userId: userId,
       },
     })
 
-    return NextResponse.json({ url: checkoutSession.url })
+    // Create a payment link for the subscription
+    const paymentLink = await razorpay.paymentLink.create({
+      amount: amountInPaise,
+      currency: 'INR',
+      accept_partial: false,
+      description: `Subscription to ${priceData.name} plan`,
+      customer: {
+        name: customerEmail?.split('@')[0] || 'Customer',
+        email: customerEmail,
+      },
+      notify: {
+        email: true,
+      },
+      reminder_enable: true,
+      notes: {
+        userId: userId,
+        subscriptionId: subscription.id,
+      },
+      callback_url: `${process.env.NEXT_PUBLIC_APP_URL}/dashboard/billing?success=true&subscription_id=${subscription.id}`,
+      callback_method: 'get',
+    })
+
+    return NextResponse.json({ url: paymentLink.short_url, subscriptionId: subscription.id })
   } catch (err) {
     console.error('Error creating checkout session:', err)
     return NextResponse.json(
