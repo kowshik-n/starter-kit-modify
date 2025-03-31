@@ -1,4 +1,4 @@
-import { supabase} from '@/utils/supabase'
+import {supabase } from '@/utils/supabase'
 import { NextResponse } from 'next/server'
 
 export async function GET(
@@ -48,8 +48,6 @@ export async function PUT(
   { params }: { params: { id: string } }
 ) {
   try {
-    const supabase = createServerClient()
-    
     // Check authentication
     const { data: { user }, error: authError } = await supabase.auth.getUser()
     if (authError || !user) {
@@ -59,14 +57,23 @@ export async function PUT(
       )
     }
 
+    // Get the request body
     const { title, content } = await req.json()
 
+    // Validate the request
+    if (!title || !content || !Array.isArray(content)) {
+      return NextResponse.json(
+        { error: 'Invalid request data' },
+        { status: 400 }
+      )
+    }
+
     // Update the subtitle
-    const { data: subtitle, error } = await supabase
+    const { data, error } = await supabase
       .from('subtitles')
       .update({
-        title: title,
-        content: content,
+        title,
+        content,
         updated_at: new Date().toISOString()
       })
       .eq('id', params.id)
@@ -82,7 +89,7 @@ export async function PUT(
       )
     }
 
-    return NextResponse.json({ subtitle })
+    return NextResponse.json({ subtitle: data })
   } catch (error) {
     console.error('Error:', error)
     return NextResponse.json(
@@ -97,7 +104,7 @@ export async function DELETE(
   { params }: { params: { id: string } }
 ) {
   try {
-    const supabase = createServerClient()
+    // const supabase = createServerClient()
     
     // Check authentication
     const { data: { user }, error: authError } = await supabase.auth.getUser()
